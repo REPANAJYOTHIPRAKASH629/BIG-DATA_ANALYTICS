@@ -1,0 +1,57 @@
+import java.io.IOException;
+import java.util.StringTokenizer;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.DoubleWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+
+public class MaxSalePerStore {
+
+    public static class MaxSaleMapper extends Mapper<Object, Text, Text, DoubleWritable> {
+        
+        private Text storeName = new Text();
+        private DoubleWritable salesAmount = new DoubleWritable();
+
+        public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+            StringTokenizer itr = new StringTokenizer(value.toString(), ",");
+            String store = itr.nextToken().trim();
+            storeName.set(store);
+            double amount = Double.parseDouble(itr.nextToken().trim());
+            salesAmount.set(amount);
+            context.write(storeName, salesAmount);
+        }
+    }
+
+    public static class MaxSaleReducer extends Reducer<Text, DoubleWritable, Text, DoubleWritable> {
+        
+        private DoubleWritable maxSale = new DoubleWritable();
+
+        public void reduce(Text key, Iterable<DoubleWritable> values, Context context)
+                throws IOException, InterruptedException {
+            double max = Double.MIN_VALUE;
+            for (DoubleWritable val : values) {
+                max = Math.max(max, val.get());
+            }
+            maxSale.set(max);
+            context.write(key, maxSale);
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        Configuration conf = new Configuration();
+        Job job = Job.getInstance(conf, "Max Sale Per Store");
+        job.setJarByClass(MaxSalePerStore.class);
+        job.setMapperClass(MaxSaleMapper.class);
+        job.setReducerClass(MaxSaleReducer.class);
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(DoubleWritable.class);
+        FileInputFormat.addInputPath(job, new Path(args[0]));
+        FileOutputFormat.setOutputPath(job, new Path(args[1]));
+        job.waitForCompletion(true);
+    }
+}
